@@ -143,7 +143,7 @@ def main():
 
     started, singlePlayer = False, False
 
-    noPlayer = True
+    noPlayer = False
     if noPlayer:
         AI1 = computerPlayer.AI('x')
         AI2 = computerPlayer.AI('o')
