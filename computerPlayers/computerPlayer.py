@@ -1,5 +1,11 @@
 # ---- constants:
-X, O = 0, 1
+from constants import X, O
+
+BASEVAL_SIDE = 2
+BASEVAL_CORNER = 3
+BASEVAL_MIDDLE = 4
+BLOCK2_FACTOR = 2
+MAKE2_FACTOR = 2
 
 # boardState offsets
 CROSS_OFFSET = 0

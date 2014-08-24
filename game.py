@@ -1,22 +1,7 @@
-import pygame
 import itertools
-import computerPlayer
-
-# ---- constants:
-# board constants
-BLOCK_WIDTH = 70
-SEC_SEP_WIDTH = 3
-PRM_SEP_WIDTH = 10
-CONSOLE_HEIGHT = 80
-SUB_WIDTH = 3 * BLOCK_WIDTH + 2 * SEC_SEP_WIDTH
-SCREEN_WIDTH = 4 * PRM_SEP_WIDTH + 3 * SUB_WIDTH
-SCREEN_HEIGHT = SCREEN_WIDTH + CONSOLE_HEIGHT
-# start prompts
-BUTTON_HEIGHT = 35
-BUTTON_WIDTH = 250
-PROMPT_BUTTON_SEP_WIDTH = 50
-
-X, O = True, False
+import pygame
+from computerPlayers import computerPlayer
+from constants import *
 
 def yieldPrmSeps(prmSeps):
     for i in range(2):
@@ -158,6 +143,12 @@ def main():
 
     started, singlePlayer = False, False
 
+    noPlayer = True
+    if noPlayer:
+        AI1 = computerPlayer.AI('x')
+        AI2 = computerPlayer.AI('o')
+        x, y = 0, 0
+
     # ---- game loop
     while turn < 81:
 
@@ -182,6 +173,25 @@ def main():
                     elif multiplayerButton.collidepoint(event.pos):
                         singlePlayer = False
                         started = True
+
+        if noPlayer:
+            validInput = False
+            i, j = x, y
+            if move == X:
+                k, l = AI1.playMove(i, j, board)
+                board[i][j][k][l] = 'x'
+                AI1.update(i, j, k, l, True)
+                AI2.update(i, j, k, l, False)
+            else:
+                k, l = AI2.playMove(i, j, board)
+                board[i][j][k][l] = 'o'
+                AI1.update(i, j, k, l, False)
+                AI2.update(i, j, k, l, True)
+            won, direct = checkWin(i, j, k, l, board)
+            if won:
+                break
+            x, y = k, l
+            move, turn = not move, turn + 1
 
         # ---- logic:
         if validInput:
@@ -277,6 +287,7 @@ def main():
 
     pygame.display.flip()
 
+    # ---- game over
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
