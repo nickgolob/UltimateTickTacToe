@@ -37,7 +37,7 @@ class AI:
             self.other = X
 
     # ---- macros:
-    def coordToPlayVals(self, k, l):
+    def coordToBaseVals(self, k, l):
         if k + l % 2 != 0:
             return self.placeValues['side']
         elif k == l == 1:
@@ -80,7 +80,7 @@ class AI:
                         continue
 
                     # evaluate play:
-                    score = self.coordToPlayVals(k, l)
+                    score = self.coordToBaseVals(k, l)
                     for x in self.coordToOffsets(k, l):
                         if self.boardState[i][j][x][self.player] == 1 and \
                                         self.boardState[i][j][x][self.other] == 0:

@@ -1,24 +1,17 @@
 import itertools
 import pygame
-from computerPlayers import computerPlayer
+from computerPlayers import computerPlayer, baseAI
 from constants import *
 
 def yieldPrmSeps(prmSeps):
-    for i in range(2):
-        for j in range(4):
-            yield prmSeps[i][j]
+    for i, j in itertools.product(range(2), range(4)):
+        yield prmSeps[i][j]
 def yieldSecSeps(secSeps):
-    for i in range(3):
-        for j in range(3):
-            for k in range(2):
-                for l in range(2):
-                    yield secSeps[i][j][k][l]
+    for i, j, k, l in itertools.product(range(3), range(3), range(2), range(2)):
+        yield secSeps[i][j][k][l]
 def yieldBoardAndCoords(board):
-    for i in range(3):
-        for j in range(3):
-            for k in range(3):
-                for l in range(3):
-                    yield board[i][j][k][l], i, j, k, l
+    for i, j, k, l in itertools.product(range(3), range(3), range(3), range(3)):
+        yield board[i][j][k][l], i, j, k, l
 
 def posToBox(pos, invalids):
     # validate:
@@ -137,7 +130,7 @@ def main():
         None for l in range(3)] for k in range(3)]
         for j in range(3)] for i in range(3)]
 
-    AI = None
+    AI, boundedMove, coords = None, None, None
 
     move, turn, won = X, 0, False
 
@@ -145,9 +138,9 @@ def main():
 
     noPlayer = False
     if noPlayer:
-        AI1 = computerPlayer.AI('x')
-        AI2 = computerPlayer.AI('o')
-        x, y = 0, 0
+        AI1 = baseAI.BaseAI(X)
+        AI2 = baseAI.BaseAI(O)
+        boundedMove = False
 
     # ---- game loop
     while turn < 81:
@@ -158,7 +151,7 @@ def main():
             if event.type == pygame.QUIT:
                 return
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if started and (singlePlayer or move == X):
+                if started and (not singlePlayer or move == X):
                     print(event.pos)
                     validInput, coords = posToBox(event.pos,
                         itertools.chain(yieldPrmSeps(prmSeperators),
@@ -168,54 +161,76 @@ def main():
                 else:
                     if singleplayerButton.collidepoint(event.pos):
                         singlePlayer = True
-                        started = True
-                        AI = computerPlayer.AI('o')
+                        AI = baseAI.BaseAI(O)
                     elif multiplayerButton.collidepoint(event.pos):
                         singlePlayer = False
-                        started = True
+                    started = True
+                    boundedMove = False
 
+        # ---- no play logic:
         if noPlayer:
             validInput = False
-            i, j = x, y
             if move == X:
-                k, l = AI1.playMove(i, j, board)
+                if boundedMove:
+                    (i, j, k, l) = AI1.getMove(board, i = boundTile[0], j = boundTile[1])
+                else:
+                    (i, j, k, l) = AI1.getMove(board)
                 board[i][j][k][l] = 'x'
-                AI1.update(i, j, k, l, True)
-                AI2.update(i, j, k, l, False)
             else:
-                k, l = AI2.playMove(i, j, board)
+                if boundedMove:
+                    (i, j, k, l) = AI2.getMove(board, i = boundTile[0], j = boundTile[1])
+                else:
+                    (i, j, k, l) = AI2.getMove(board)
                 board[i][j][k][l] = 'o'
-                AI1.update(i, j, k, l, False)
-                AI2.update(i, j, k, l, True)
+            AI1.update(i, j, k, l, move)
+            AI2.update(i, j, k, l, move)
             won, direct = checkWin(i, j, k, l, board)
             if won:
                 break
-            x, y = k, l
-            move, turn = not move, turn + 1
+            # check for minor-draw:
+            boundedMove = True
+            boundTile = k, l
+            for x, y in itertools.product(range(3), range(3)):
+                if not board[i][j][x][y]:
+                    break
+            else:
+                boundedMove = False
+            move, turn = (move + 1) % 2, turn + 1
 
         # ---- logic:
         if validInput:
             i, j, k, l = coords
+            if (boundedMove and (i, j) != boundTile):
+                validInput = False
         elif singlePlayer and move == O:
-            i, j = x, y
-            k, l = AI.playMove(i, j, board)
+            if boundedMove:
+                (i, j, k, l) = AI.getMove(board, i = boundTile[0], j = boundTile[1])
+            else:
+                (i, j, k, l) = AI.getMove(board)
             validInput = True
 
-        if validInput and (turn == 0 or (i == x and j == y and not board[i][j][k][l])):
+        if validInput:
             # we're in business
             board[i][j][k][l] = 'x' if move == X else 'o'
             if singlePlayer:
-                AI.update(i, j, k, l, False if move == X else True)
+                AI.update(i, j, k, l, move)
             won, direct = checkWin(i, j, k, l, board)
             if won:
                 break
-            x, y = k, l
-            move, turn = not move, turn + 1
+            # check for minor-draw:
+            boundedMove = True
+            boundTile = k, l
+            for x, y in itertools.product(range(3), range(3)):
+                if not board[i][j][x][y]:
+                    break
+            else:
+                boundedMove = False
+            move, turn = (move + 1) % 2, turn + 1
 
         # ---- drawing:
         screen.fill((255, 255, 255))
-        if turn > 0:
-            pygame.draw.rect(screen, (139, 255, 190), boardBacks[x][y])
+        if started and boundedMove:
+            pygame.draw.rect(screen, (139, 255, 190), boardBacks[boundTile[0]][boundTile[1]])
         for line in yieldPrmSeps(prmSeperators):
             pygame.draw.rect(screen, (255, 0, 0), line)
         for line in yieldSecSeps(secSeperators):
@@ -251,6 +266,9 @@ def main():
             screen.blit(multiplayerText, (_x - width // 2, _y - height // 2))
 
         pygame.display.flip()
+
+        # ---- post drawing logic:
+
 
         # ---- iterate:
         clock.tick(30)

@@ -1,3 +1,4 @@
+# (can be indices)
 X, O = 0, 1
 
 # board constants
