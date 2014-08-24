@@ -1,14 +1,20 @@
 import pygame
 import itertools
+import computerPlayer
 
 # ---- constants:
+# board constants
 BLOCK_WIDTH = 70
 SEC_SEP_WIDTH = 3
 PRM_SEP_WIDTH = 10
-CONSOLE_WIDTH = 80
+CONSOLE_HEIGHT = 80
 SUB_WIDTH = 3 * BLOCK_WIDTH + 2 * SEC_SEP_WIDTH
 SCREEN_WIDTH = 4 * PRM_SEP_WIDTH + 3 * SUB_WIDTH
-SCREEN_HEIGHT = SCREEN_WIDTH + CONSOLE_WIDTH
+SCREEN_HEIGHT = SCREEN_WIDTH + CONSOLE_HEIGHT
+# start prompts
+BUTTON_HEIGHT = 35
+BUTTON_WIDTH = 250
+PROMPT_BUTTON_SEP_WIDTH = 50
 
 X, O = True, False
 
@@ -40,8 +46,8 @@ def posToBox(pos, invalids):
     return True, (
         x // (PRM_SEP_WIDTH + SUB_WIDTH),
         y // (PRM_SEP_WIDTH + SUB_WIDTH),
-        (x % (PRM_SEP_WIDTH + SUB_WIDTH)) // (SEC_SEP_WIDTH + BLOCK_WIDTH),
-        (y % (PRM_SEP_WIDTH + SUB_WIDTH)) // (SEC_SEP_WIDTH + BLOCK_WIDTH))
+        ((x - PRM_SEP_WIDTH) % (PRM_SEP_WIDTH + SUB_WIDTH)) // (SEC_SEP_WIDTH + BLOCK_WIDTH),
+        ((y - PRM_SEP_WIDTH) % (PRM_SEP_WIDTH + SUB_WIDTH)) // (SEC_SEP_WIDTH + BLOCK_WIDTH))
 
 def boxIndexToCenterPos(i, j, k, l):
     x = PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH) + \
@@ -85,6 +91,18 @@ def main():
     clock = pygame.time.Clock()
 
     # ---- draw init:
+    startPromptText = pygame.font.SysFont('', 30).render('1-player vs. AI or 2-player?', 0, (0, 0, 0))
+    singleplayerButton = pygame.Rect(
+        (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2 - BUTTON_WIDTH // 2,
+        SCREEN_WIDTH + (CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3,
+        BUTTON_WIDTH, BUTTON_HEIGHT)
+    multiplayerButton = pygame.Rect(
+        (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2 - BUTTON_WIDTH // 2,
+        SCREEN_WIDTH + 2 * ((CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3) + BUTTON_HEIGHT,
+        BUTTON_WIDTH, BUTTON_HEIGHT)
+    singleplayerText = pygame.font.SysFont('', 30).render('single player mode', 0, (0, 0, 0))
+    multiplayerText = pygame.font.SysFont('', 30).render('multiplayer mode', 0, (0, 0, 0))
+
     boardBacks = [[
         # (0, 1, 2) X (0, 1, 2)
         pygame.Rect(PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH),
@@ -134,7 +152,11 @@ def main():
         None for l in range(3)] for k in range(3)]
         for j in range(3)] for i in range(3)]
 
+    AI = None
+
     move, turn, won = X, 0, False
+
+    started, singlePlayer = False, False
 
     # ---- game loop
     while turn < 81:
@@ -145,24 +167,40 @@ def main():
             if event.type == pygame.QUIT:
                 return
             if event.type == pygame.MOUSEBUTTONDOWN:
-                print(event.pos)
-                validInput, coords = posToBox(event.pos,
-                    itertools.chain(yieldPrmSeps(prmSeperators),
-                                    yieldSecSeps(secSeperators)))
-                if validInput:
-                    print('golden', coords)
+                if started and (singlePlayer or move == X):
+                    print(event.pos)
+                    validInput, coords = posToBox(event.pos,
+                        itertools.chain(yieldPrmSeps(prmSeperators),
+                                        yieldSecSeps(secSeperators)))
+                    if validInput:
+                        print('golden', coords)
+                else:
+                    if singleplayerButton.collidepoint(event.pos):
+                        singlePlayer = True
+                        started = True
+                        AI = computerPlayer.AI('o')
+                    elif multiplayerButton.collidepoint(event.pos):
+                        singlePlayer = False
+                        started = True
 
         # ---- logic:
         if validInput:
             i, j, k, l = coords
-            if turn == 0 or (i == x and j == y and not board[i][j][k][l]):
-                # we're in business
-                board[i][j][k][l] = 'x' if move == X else 'o'
-                won, direct = checkWin(i, j, k, l, board)
-                if won:
-                    break
-                x, y = k, l
-                move, turn = not move, turn + 1
+        elif singlePlayer and move == O:
+            i, j = x, y
+            k, l = AI.playMove(i, j, board)
+            validInput = True
+
+        if validInput and (turn == 0 or (i == x and j == y and not board[i][j][k][l])):
+            # we're in business
+            board[i][j][k][l] = 'x' if move == X else 'o'
+            if singlePlayer:
+                AI.update(i, j, k, l, False if move == X else True)
+            won, direct = checkWin(i, j, k, l, board)
+            if won:
+                break
+            x, y = k, l
+            move, turn = not move, turn + 1
 
         # ---- drawing:
         screen.fill((255, 255, 255))
@@ -177,10 +215,30 @@ def main():
                 width, height = boardSymbols[char].get_size()
                 _x, _y = boxIndexToCenterPos(i, j, k, l)
                 screen.blit(boardSymbols[char], (_x - width // 2, _y - height // 2))
-        key = 'x-turn' if move == X else 'o-turn'
-        width, height = consoleTexts[key].get_size()
-        _x, _y = (SCREEN_WIDTH // 2, SCREEN_WIDTH + CONSOLE_WIDTH // 2)
-        screen.blit(consoleTexts[key], (_x - width // 2, _y - height // 2))
+        if started:
+            key = 'x-turn' if move == X else 'o-turn'
+            width, height = consoleTexts[key].get_size()
+            _x, _y = (SCREEN_WIDTH // 2, SCREEN_WIDTH + CONSOLE_HEIGHT // 2)
+            screen.blit(consoleTexts[key], (_x - width // 2, _y - height // 2))
+        else:
+            pygame.draw.rect(screen, (82, 198, 255), singleplayerButton)
+            pygame.draw.rect(screen, (255, 112, 68), multiplayerButton)
+
+            width, height = startPromptText.get_size()
+            _x, _y = \
+                (SCREEN_WIDTH - PROMPT_BUTTON_SEP_WIDTH) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2,\
+                SCREEN_WIDTH + CONSOLE_HEIGHT // 2
+            screen.blit(startPromptText, (_x - width // 2, _y - height // 2))
+
+            width, height = singleplayerText.get_size()
+            _x, _y = (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2,\
+                     SCREEN_WIDTH + (CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3 + BUTTON_HEIGHT // 2
+            screen.blit(singleplayerText, (_x - width // 2, _y - height // 2))
+
+            width, height = multiplayerText.get_size()
+            _x, _y = (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2,\
+                     SCREEN_WIDTH + 2 * ((CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3) + (3 * BUTTON_HEIGHT) // 2
+            screen.blit(multiplayerText, (_x - width // 2, _y - height // 2))
 
         pygame.display.flip()
 
@@ -214,7 +272,7 @@ def main():
     else:
         key = 'draw'
     width, height = consoleTexts[key].get_size()
-    _x, _y = (SCREEN_WIDTH // 2, SCREEN_WIDTH + CONSOLE_WIDTH // 2)
+    _x, _y = (SCREEN_WIDTH // 2, SCREEN_WIDTH + CONSOLE_HEIGHT // 2)
     screen.blit(consoleTexts[key], (_x - width // 2, _y - height // 2))
 
     pygame.display.flip()
