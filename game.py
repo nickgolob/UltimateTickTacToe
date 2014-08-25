@@ -138,8 +138,26 @@ def main():
 
     noPlayer = False
     if noPlayer:
-        AI1 = baseAI.BaseAI(X)
-        AI2 = baseAI.BaseAI(O)
+        kwargs1 = {
+            'side' : 1,
+            'corner' : 1,
+            'middle' : 1,
+            'block2' : 1.5,
+            'freesquare' : 2,
+            'make2' : 1.5,
+            'locksquare' : 2,
+        }
+        AI1 = baseAI.BaseAI(X, **kwargs1)
+        kwargs2 = {
+            'side' : 1,
+            'corner' : 1,
+            'middle' : 1,
+            'block2' : 1.5,
+            'freesquare' : 2,
+            'make2' : 1.5,
+            'locksquare' : 2,
+        }
+        AI2 = baseAI.BaseAI(O, **kwargs2)
         boundedMove = False
 
     # ---- game loop
@@ -162,9 +180,10 @@ def main():
                     if singleplayerButton.collidepoint(event.pos):
                         singlePlayer = True
                         AI = baseAI.BaseAI(O)
+                        started = True
                     elif multiplayerButton.collidepoint(event.pos):
                         singlePlayer = False
-                    started = True
+                        started = True
                     boundedMove = False
 
         # ---- no play logic:
@@ -267,11 +286,8 @@ def main():
 
         pygame.display.flip()
 
-        # ---- post drawing logic:
-
-
         # ---- iterate:
-        clock.tick(30)
+        clock.tick(15)
 
     # ---- final drawing:
     screen.fill((255, 255, 255))

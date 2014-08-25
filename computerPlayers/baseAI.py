@@ -1,4 +1,4 @@
-import itertools
+import itertools, copy
 from constants import X, O
 
 # boardstate offsets:
@@ -6,6 +6,16 @@ CROSS_OFFSET = 0
 DOWN_OFFSET = 3
 NEG_OFFSET = 6
 POS_OFFSET = 7
+
+defaultValues = {
+    'side' : 2,
+    'corner' : 3,
+    'middle' : 4,
+    'block2' : 1.5,
+    'freesquare' : 1.5,
+    'make2' : 1.5,
+    'locksquare' : 1.5,
+}
 
 def coordToOffsets(k, l):
     load = []
@@ -23,20 +33,8 @@ def coordToOffsets(k, l):
 
 class BaseAI:
 
-    # values
-    playValues = {
-        'side' : 2,
-        'corner' : 3,
-        'middle' : 4,
-        'block2' : 1.5,
-        'freesquare' : 1.5,
-        'make2' : 1.5,
-        'locksquare' : 1.5,
-        'win' : 30,
-        'loss' : -1
-    }
-
-    def __init__(self, player):
+    def __init__(self, player, **kwargs):
+        """ kwargs are custom valuations in the playValues dictionary """
         self.boardState = [
             # ROW(3) X COL(3) X DOWN(3), CROSS(3), NEG(1), POS(1) X (#x's, #o's)
             [[[0, 0] for k in range(8)] for j in range(3)] for i in range(3)]
@@ -48,6 +46,16 @@ class BaseAI:
             [0 for j in range(3)] for i in range(3)]
         self.player = player
         self.other = (player + 1) % 2
+
+        self.playValues = copy.deepcopy(defaultValues)
+        for key, customValue in kwargs.iteritems():
+            self.playValues[key] = customValue
+        # get win/lose:
+        prod = 1
+        for key, value in self.playValues.iteritems():
+            prod *= value
+        self.playValues['win'] = abs(prod)
+        self.playValues['loss'] = - abs(prod)
 
     def coordToBaseVals(self, k, l):
         if k + l % 2 != 0:
@@ -70,7 +78,16 @@ class BaseAI:
                     if self.boardState[i][j][x][self.player] == 2:
                         return (i, j, k, l, self.playValues['win']) \
                             if retScore else (i, j, k, l)
-                    if self.locks[k][l][self.other] or self.totals[k][l] == 9:
+                    if (i, j) != (k, l) and self.locks[k][l][self.other]:
+                        terminal = True
+                        break
+                    elif (i, j) == (k, l):
+                        for y, threat in enumerate(self.boardState[k][l]):
+                            if threat[self.player] == 0 and threat[self.other] == 2 \
+                                    and not y in coordToOffsets(k, l):
+                                terminal = True
+                                break
+                    if self.totals[k][l] == 9:
                         terminal = True
                         break
                 if terminal:
@@ -125,8 +142,17 @@ class BaseAI:
         self.totals[i][j] += 1
         for x in coordToOffsets(k, l):
             self.boardState[i][j][x][player] += 1
+
         for state in self.boardState[i][j]:
             if state[X] == 2 and state[O] == 0:
                 self.locks[i][j][X] = True
-            elif state[O] == 2 and state[X] == 0:
+                break
+        else:
+            self.locks[i][j][X] = False
+
+        for state in self.boardState[i][j]:
+            if state[O] == 2 and state[X] == 0:
                 self.locks[i][j][O] = True
+                break
+        else:
+            self.locks[i][j][O] = False
