@@ -3,12 +3,6 @@ import pygame
 from computerPlayers import computerPlayer, baseAI
 from constants import *
 
-def yieldPrmSeps(prmSeps):
-    for i, j in itertools.product(range(2), range(4)):
-        yield prmSeps[i][j]
-def yieldSecSeps(secSeps):
-    for i, j, k, l in itertools.product(range(3), range(3), range(2), range(2)):
-        yield secSeps[i][j][k][l]
 def yieldBoardAndCoords(board):
     for i, j, k, l in itertools.product(range(3), range(3), range(3), range(3)):
         yield board[i][j][k][l], i, j, k, l
@@ -61,6 +55,92 @@ def checkWin(i, j, k, l, board):
                 return (True, 'pos')
     return (False, None)
 
+class DrawManager():
+
+    def __init__(self):
+
+        self.startPromptText = pygame.font.SysFont('', 30).render('1-player vs. AI or 2-player?', 0, (0, 0, 0))
+        self.singleplayerButton = pygame.Rect(
+            (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2 - BUTTON_WIDTH // 2,
+            SCREEN_WIDTH + (CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3,
+            BUTTON_WIDTH, BUTTON_HEIGHT)
+        self.multiplayerButton = pygame.Rect(
+            (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2 - BUTTON_WIDTH // 2,
+            SCREEN_WIDTH + 2 * ((CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3) + BUTTON_HEIGHT,
+            BUTTON_WIDTH, BUTTON_HEIGHT)
+        self.singleplayerText = pygame.font.SysFont('', 30).render('single player mode', 0, (0, 0, 0))
+        self.multiplayerText = pygame.font.SysFont('', 30).render('multiplayer mode', 0, (0, 0, 0))
+
+        self.boardBacks = [[
+            # (0, 1, 2) X (0, 1, 2)
+            pygame.Rect(PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH),
+                        PRM_SEP_WIDTH + j * (SUB_WIDTH + PRM_SEP_WIDTH),
+                        SUB_WIDTH, SUB_WIDTH)
+            for j in range(3)] for i in range(3)]
+
+        self.prmSeperators = [
+            # (0, 1) X (0, 1, 2, 3) primaries:
+            [pygame.Rect(i * (PRM_SEP_WIDTH + SUB_WIDTH), 0,
+                         PRM_SEP_WIDTH, SCREEN_WIDTH)
+             for i in range(4)],
+            [pygame.Rect(0, i * (PRM_SEP_WIDTH + SUB_WIDTH),
+                         SCREEN_WIDTH, PRM_SEP_WIDTH)
+             for i in range(4)]]
+
+        self.secSeperators = [[[[
+            # (0, 1, 2) X (0, 1, 2) X (0, 1) X (0, 1) secondaries:
+            pygame.Rect(
+                PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH) + \
+                BLOCK_WIDTH + k * (BLOCK_WIDTH + SEC_SEP_WIDTH),
+                PRM_SEP_WIDTH + j * (SUB_WIDTH + PRM_SEP_WIDTH),
+                SEC_SEP_WIDTH, SUB_WIDTH),
+            pygame.Rect(
+                PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH),
+                PRM_SEP_WIDTH + j * (SUB_WIDTH + PRM_SEP_WIDTH) + \
+                BLOCK_WIDTH + k * (BLOCK_WIDTH + SEC_SEP_WIDTH),
+                SUB_WIDTH, SEC_SEP_WIDTH)
+            ] for k in range(2)] for j in range(3)] for i in range(3)]
+
+        self.boardSymbols = {
+            'x' : pygame.font.SysFont('', 70).render('X', 0, (0, 0, 0)),
+            'o' : pygame.font.SysFont('', 70).render('O', 0, (0, 0, 0))
+        }
+
+        self.consoleTexts = {
+            'x-turn' : pygame.font.SysFont('', 50).render('X\'s move', 0, (0, 0, 0)),
+            'o-turn' : pygame.font.SysFont('', 50).render('O\'s move', 0, (0, 0, 0)),
+            'x-win' : pygame.font.SysFont('', 50).render('X has won', 0, (0, 0, 0)),
+            'o-win' : pygame.font.SysFont('', 50).render('O has won', 0, (0, 0, 0)),
+            'draw' : pygame.font.SysFont('', 50).render('stalemate', 0, (0, 0, 0))
+        }
+
+
+
+    def highlightRegion(self, screen, i, j):
+        pygame.draw.rect(screen, (139, 255, 190), self.boardBacks[i][j])
+
+    def yieldPrmSeps(self):
+        for i, j in itertools.product(range(2), range(4)):
+            yield self.prmSeperators[i][j]
+    def yieldSecSeps(self):
+        for i, j, k, l in itertools.product(range(3), range(3), range(2), range(2)):
+            yield self.secSeperators[i][j][k][l]
+    def layLines(self, screen):
+        for line in self.yieldPrmSeps():
+            pygame.draw.rect(screen, (255, 0, 0), line)
+        for line in self.yieldSecSeps():
+            pygame.draw.rect(screen, (0, 0, 255), line)
+
+    def placeCharsFromBoard(self, screen, board):
+        for char, i, j, k, l in yieldBoardAndCoords(board):
+            if char == 'x' or char == 'o':
+                width, height = self.boardSymbols[char].get_size()
+                _x, _y = boxIndexToCenterPos(i, j, k, l)
+                screen.blit(self.boardSymbols[char], (_x - width // 2, _y - height // 2))
+
+    def flipBoard(self, board, screen):
+        pass
+
 def main():
     # ---- engine init:
     pygame.init()
@@ -69,6 +149,8 @@ def main():
     clock = pygame.time.Clock()
 
     # ---- draw init:
+    drawer = DrawManager()
+
     startPromptText = pygame.font.SysFont('', 30).render('1-player vs. AI or 2-player?', 0, (0, 0, 0))
     singleplayerButton = pygame.Rect(
         (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2 - BUTTON_WIDTH // 2,
@@ -136,16 +218,16 @@ def main():
 
     started, singlePlayer = False, False
 
-    noPlayer = False
+    noPlayer = True
     if noPlayer:
         kwargs1 = {
-            'side' : 1,
+            'side' : 2,
             'corner' : 1,
             'middle' : 1,
-            'block2' : 1.5,
-            'freesquare' : 2,
-            'make2' : 1.5,
-            'locksquare' : 2,
+            'block2' : 1,
+            'freesquare' : 1,
+            'make2' : 4,
+            'locksquare' : 4,
         }
         AI1 = baseAI.BaseAI(X, **kwargs1)
         kwargs2 = {
@@ -172,8 +254,7 @@ def main():
                 if started and (not singlePlayer or move == X):
                     print(event.pos)
                     validInput, coords = posToBox(event.pos,
-                        itertools.chain(yieldPrmSeps(prmSeperators),
-                                        yieldSecSeps(secSeperators)))
+                        itertools.chain(drawer.yieldPrmSeps(), drawer.yieldSecSeps()))
                     if validInput:
                         print('golden', coords)
                 else:
@@ -219,7 +300,7 @@ def main():
         # ---- logic:
         if validInput:
             i, j, k, l = coords
-            if (boundedMove and (i, j) != boundTile):
+            if (boundedMove and (i, j) != boundTile) or board[i][j][k][l]:
                 validInput = False
         elif singlePlayer and move == O:
             if boundedMove:
@@ -249,16 +330,9 @@ def main():
         # ---- drawing:
         screen.fill((255, 255, 255))
         if started and boundedMove:
-            pygame.draw.rect(screen, (139, 255, 190), boardBacks[boundTile[0]][boundTile[1]])
-        for line in yieldPrmSeps(prmSeperators):
-            pygame.draw.rect(screen, (255, 0, 0), line)
-        for line in yieldSecSeps(secSeperators):
-            pygame.draw.rect(screen, (0, 0, 255), line)
-        for char, i, j, k, l in yieldBoardAndCoords(board):
-            if char == 'x' or char == 'o':
-                width, height = boardSymbols[char].get_size()
-                _x, _y = boxIndexToCenterPos(i, j, k, l)
-                screen.blit(boardSymbols[char], (_x - width // 2, _y - height // 2))
+            drawer.highlightRegion(screen, *boundTile)
+        drawer.layLines(screen)
+        drawer.placeCharsFromBoard(screen, board)
         if started:
             key = 'x-turn' if move == X else 'o-turn'
             width, height = consoleTexts[key].get_size()
@@ -291,15 +365,8 @@ def main():
 
     # ---- final drawing:
     screen.fill((255, 255, 255))
-    for line in yieldPrmSeps(prmSeperators):
-        pygame.draw.rect(screen, (255, 0, 0), line)
-    for line in yieldSecSeps(secSeperators):
-        pygame.draw.rect(screen, (0, 0, 255), line)
-    for char, _i, _j, _k, _l in yieldBoardAndCoords(board):
-        if char == 'x' or char == 'o':
-            width, height = boardSymbols[char].get_size()
-            _x, _y = boxIndexToCenterPos(_i, _j, _k, _l)
-            screen.blit(boardSymbols[char], (_x - width // 2, _y - height // 2))
+    drawer.layLines(screen)
+    drawer.placeCharsFromBoard(screen, board)
     if won:
         key = 'x-win' if move == X else 'o-win'
         if direct == 'cross':
