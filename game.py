@@ -3,30 +3,7 @@ import pygame
 from computerPlayers import computerPlayer, baseAI
 from constants import *
 
-def yieldBoardAndCoords(board):
-    for i, j, k, l in itertools.product(range(3), range(3), range(3), range(3)):
-        yield board[i][j][k][l], i, j, k, l
-
-def posToBox(pos, invalids):
-    # validate:
-    x, y = pos
-    if not x in range(SCREEN_WIDTH) or y not in range(SCREEN_WIDTH):
-        return False, None
-    for line in invalids:
-        if line.collidepoint(x, y):
-            return False, None
-    return True, (
-        x // (PRM_SEP_WIDTH + SUB_WIDTH),
-        y // (PRM_SEP_WIDTH + SUB_WIDTH),
-        ((x - PRM_SEP_WIDTH) % (PRM_SEP_WIDTH + SUB_WIDTH)) // (SEC_SEP_WIDTH + BLOCK_WIDTH),
-        ((y - PRM_SEP_WIDTH) % (PRM_SEP_WIDTH + SUB_WIDTH)) // (SEC_SEP_WIDTH + BLOCK_WIDTH))
-
-def boxIndexToCenterPos(i, j, k, l):
-    x = PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH) + \
-        k * (BLOCK_WIDTH + SEC_SEP_WIDTH) + (BLOCK_WIDTH // 2)
-    y = PRM_SEP_WIDTH + j * (SUB_WIDTH + PRM_SEP_WIDTH) + \
-        l * (BLOCK_WIDTH + SEC_SEP_WIDTH) + (BLOCK_WIDTH // 2)
-    return x, y
+noPlayer = True
 
 def checkWin(i, j, k, l, board):
     char = board[i][j][k][l]
@@ -55,7 +32,7 @@ def checkWin(i, j, k, l, board):
                 return (True, 'pos')
     return (False, None)
 
-class DrawManager():
+class GraphicsManager():
 
     def __init__(self):
 
@@ -114,34 +91,99 @@ class DrawManager():
             'draw' : pygame.font.SysFont('', 50).render('stalemate', 0, (0, 0, 0))
         }
 
-
-
     def highlightRegion(self, screen, i, j):
         pygame.draw.rect(screen, (139, 255, 190), self.boardBacks[i][j])
 
-    def yieldPrmSeps(self):
+    def _yieldPrmSeps(self):
         for i, j in itertools.product(range(2), range(4)):
             yield self.prmSeperators[i][j]
-    def yieldSecSeps(self):
+    def _yieldSecSeps(self):
         for i, j, k, l in itertools.product(range(3), range(3), range(2), range(2)):
             yield self.secSeperators[i][j][k][l]
     def layLines(self, screen):
-        for line in self.yieldPrmSeps():
+        for line in self._yieldPrmSeps():
             pygame.draw.rect(screen, (255, 0, 0), line)
-        for line in self.yieldSecSeps():
+        for line in self._yieldSecSeps():
             pygame.draw.rect(screen, (0, 0, 255), line)
 
+    def posToBox(self, pos):
+        # validate:
+        x, y = pos
+        if not x in range(SCREEN_WIDTH) or y not in range(SCREEN_WIDTH):
+            return False, None
+        for line in itertools.chain(self._yieldPrmSeps(), self._yieldSecSeps()):
+            if line.collidepoint(x, y):
+                return False, None
+        return True, (
+            x // (PRM_SEP_WIDTH + SUB_WIDTH),
+            y // (PRM_SEP_WIDTH + SUB_WIDTH),
+            ((x - PRM_SEP_WIDTH) % (PRM_SEP_WIDTH + SUB_WIDTH)) // (SEC_SEP_WIDTH + BLOCK_WIDTH),
+            ((y - PRM_SEP_WIDTH) % (PRM_SEP_WIDTH + SUB_WIDTH)) // (SEC_SEP_WIDTH + BLOCK_WIDTH))
+
+    def _yieldBoardAndCoords(self, board):
+        for i, j, k, l in itertools.product(range(3), range(3), range(3), range(3)):
+            yield board[i][j][k][l], i, j, k, l
+
+    def _boxIndexToCenterPos(self, i, j, k, l):
+        x = PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH) + \
+            k * (BLOCK_WIDTH + SEC_SEP_WIDTH) + (BLOCK_WIDTH // 2)
+        y = PRM_SEP_WIDTH + j * (SUB_WIDTH + PRM_SEP_WIDTH) + \
+            l * (BLOCK_WIDTH + SEC_SEP_WIDTH) + (BLOCK_WIDTH // 2)
+        return x, y
+
     def placeCharsFromBoard(self, screen, board):
-        for char, i, j, k, l in yieldBoardAndCoords(board):
+        for char, i, j, k, l in self._yieldBoardAndCoords(board):
             if char == 'x' or char == 'o':
                 width, height = self.boardSymbols[char].get_size()
-                _x, _y = boxIndexToCenterPos(i, j, k, l)
+                _x, _y = self._boxIndexToCenterPos(i, j, k, l)
                 screen.blit(self.boardSymbols[char], (_x - width // 2, _y - height // 2))
 
-    def flipBoard(self, board, screen):
-        pass
+    def _flipSurfaceCenteredAtCoords(self, screen, surface, x, y):
+        width, height = surface.get_size()
+        screen.blit(surface, (x - width // 2, y - height // 2))
+
+    def printMove(self, screen, move):
+        self._flipSurfaceCenteredAtCoords(
+            screen, self.consoleTexts['x-turn' if move == X else 'o-turn'],
+            SCREEN_WIDTH // 2, SCREEN_WIDTH + CONSOLE_HEIGHT // 2)
+
+    def printStartPtompt(self, screen):
+        pygame.draw.rect(screen, (82, 198, 255), self.singleplayerButton)
+        pygame.draw.rect(screen, (255, 112, 68), self.multiplayerButton)
+
+        self._flipSurfaceCenteredAtCoords(
+            screen, self.startPromptText,
+            (SCREEN_WIDTH - PROMPT_BUTTON_SEP_WIDTH) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2,
+            SCREEN_WIDTH + CONSOLE_HEIGHT // 2)
+
+        self._flipSurfaceCenteredAtCoords(
+            screen, self.singleplayerText,
+            (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2,
+            SCREEN_WIDTH + (CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3 + BUTTON_HEIGHT // 2)
+
+        self._flipSurfaceCenteredAtCoords(
+            screen, self.multiplayerText,
+            (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2,
+            SCREEN_WIDTH + 2 * ((CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3) + (3 * BUTTON_HEIGHT) // 2)
+
+    def printGameEnd(self, screen, player = None):
+        if player == None:
+            key = 'draw'
+        elif player == X:
+            key = 'x-win'
+        else:
+            key = 'o-win'
+        self._flipSurfaceCenteredAtCoords(
+            screen, self.consoleTexts[key],
+            SCREEN_WIDTH // 2, SCREEN_WIDTH + CONSOLE_HEIGHT // 2)
+
+    def draw3inRowLine(self, screen, i, j, k1, l1, k2, l2):
+        pygame.draw.line(screen, (0, 255, 0),
+                         self._boxIndexToCenterPos(i, j, k1, l1),
+                         self._boxIndexToCenterPos(i, j, k2, l2), 10)
 
 def main():
+
     # ---- engine init:
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -149,62 +191,7 @@ def main():
     clock = pygame.time.Clock()
 
     # ---- draw init:
-    drawer = DrawManager()
-
-    startPromptText = pygame.font.SysFont('', 30).render('1-player vs. AI or 2-player?', 0, (0, 0, 0))
-    singleplayerButton = pygame.Rect(
-        (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2 - BUTTON_WIDTH // 2,
-        SCREEN_WIDTH + (CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3,
-        BUTTON_WIDTH, BUTTON_HEIGHT)
-    multiplayerButton = pygame.Rect(
-        (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2 - BUTTON_WIDTH // 2,
-        SCREEN_WIDTH + 2 * ((CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3) + BUTTON_HEIGHT,
-        BUTTON_WIDTH, BUTTON_HEIGHT)
-    singleplayerText = pygame.font.SysFont('', 30).render('single player mode', 0, (0, 0, 0))
-    multiplayerText = pygame.font.SysFont('', 30).render('multiplayer mode', 0, (0, 0, 0))
-
-    boardBacks = [[
-        # (0, 1, 2) X (0, 1, 2)
-        pygame.Rect(PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH),
-                    PRM_SEP_WIDTH + j * (SUB_WIDTH + PRM_SEP_WIDTH),
-                    SUB_WIDTH, SUB_WIDTH)
-        for j in range(3)] for i in range(3)]
-
-    prmSeperators = [
-        # (0, 1) X (0, 1, 2, 3) primaries:
-        [pygame.Rect(i * (PRM_SEP_WIDTH + SUB_WIDTH), 0,
-                     PRM_SEP_WIDTH, SCREEN_WIDTH)
-         for i in range(4)],
-        [pygame.Rect(0, i * (PRM_SEP_WIDTH + SUB_WIDTH),
-                     SCREEN_WIDTH, PRM_SEP_WIDTH)
-         for i in range(4)]]
-
-    secSeperators = [[[[
-        # (0, 1, 2) X (0, 1, 2) X (0, 1) X (0, 1) secondaries:
-        pygame.Rect(
-            PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH) + \
-            BLOCK_WIDTH + k * (BLOCK_WIDTH + SEC_SEP_WIDTH),
-            PRM_SEP_WIDTH + j * (SUB_WIDTH + PRM_SEP_WIDTH),
-            SEC_SEP_WIDTH, SUB_WIDTH),
-        pygame.Rect(
-            PRM_SEP_WIDTH + i * (SUB_WIDTH + PRM_SEP_WIDTH),
-            PRM_SEP_WIDTH + j * (SUB_WIDTH + PRM_SEP_WIDTH) + \
-            BLOCK_WIDTH + k * (BLOCK_WIDTH + SEC_SEP_WIDTH),
-            SUB_WIDTH, SEC_SEP_WIDTH)
-        ] for k in range(2)] for j in range(3)] for i in range(3)]
-
-    boardSymbols = {
-        'x' : pygame.font.SysFont('', 70).render('X', 0, (0, 0, 0)),
-        'o' : pygame.font.SysFont('', 70).render('O', 0, (0, 0, 0))
-    }
-
-    consoleTexts = {
-        'x-turn' : pygame.font.SysFont('', 50).render('X\'s move', 0, (0, 0, 0)),
-        'o-turn' : pygame.font.SysFont('', 50).render('O\'s move', 0, (0, 0, 0)),
-        'x-win' : pygame.font.SysFont('', 50).render('X has won', 0, (0, 0, 0)),
-        'o-win' : pygame.font.SysFont('', 50).render('O has won', 0, (0, 0, 0)),
-        'draw' : pygame.font.SysFont('', 50).render('stalemate', 0, (0, 0, 0))
-    }
+    graph = GraphicsManager()
 
     # ---- logic init:
     board = [[[[
@@ -218,8 +205,8 @@ def main():
 
     started, singlePlayer = False, False
 
-    noPlayer = True
     if noPlayer:
+        started = True
         kwargs1 = {
             'side' : 2,
             'corner' : 1,
@@ -253,16 +240,15 @@ def main():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if started and (not singlePlayer or move == X):
                     print(event.pos)
-                    validInput, coords = posToBox(event.pos,
-                        itertools.chain(drawer.yieldPrmSeps(), drawer.yieldSecSeps()))
+                    validInput, coords = graph.posToBox(event.pos)
                     if validInput:
                         print('golden', coords)
                 else:
-                    if singleplayerButton.collidepoint(event.pos):
+                    if graph.singleplayerButton.collidepoint(event.pos):
                         singlePlayer = True
                         AI = baseAI.BaseAI(O)
                         started = True
-                    elif multiplayerButton.collidepoint(event.pos):
+                    elif graph.multiplayerButton.collidepoint(event.pos):
                         singlePlayer = False
                         started = True
                     boundedMove = False
@@ -330,34 +316,13 @@ def main():
         # ---- drawing:
         screen.fill((255, 255, 255))
         if started and boundedMove:
-            drawer.highlightRegion(screen, *boundTile)
-        drawer.layLines(screen)
-        drawer.placeCharsFromBoard(screen, board)
+            graph.highlightRegion(screen, *boundTile)
+        graph.layLines(screen)
+        graph.placeCharsFromBoard(screen, board)
         if started:
-            key = 'x-turn' if move == X else 'o-turn'
-            width, height = consoleTexts[key].get_size()
-            _x, _y = (SCREEN_WIDTH // 2, SCREEN_WIDTH + CONSOLE_HEIGHT // 2)
-            screen.blit(consoleTexts[key], (_x - width // 2, _y - height // 2))
+            graph.printMove(screen, move)
         else:
-            pygame.draw.rect(screen, (82, 198, 255), singleplayerButton)
-            pygame.draw.rect(screen, (255, 112, 68), multiplayerButton)
-
-            width, height = startPromptText.get_size()
-            _x, _y = \
-                (SCREEN_WIDTH - PROMPT_BUTTON_SEP_WIDTH) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2,\
-                SCREEN_WIDTH + CONSOLE_HEIGHT // 2
-            screen.blit(startPromptText, (_x - width // 2, _y - height // 2))
-
-            width, height = singleplayerText.get_size()
-            _x, _y = (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2,\
-                     SCREEN_WIDTH + (CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3 + BUTTON_HEIGHT // 2
-            screen.blit(singleplayerText, (_x - width // 2, _y - height // 2))
-
-            width, height = multiplayerText.get_size()
-            _x, _y = (SCREEN_WIDTH * 3) // 4 + PROMPT_BUTTON_SEP_WIDTH // 2,\
-                     SCREEN_WIDTH + 2 * ((CONSOLE_HEIGHT - 2 * BUTTON_HEIGHT) // 3) + (3 * BUTTON_HEIGHT) // 2
-            screen.blit(multiplayerText, (_x - width // 2, _y - height // 2))
-
+            graph.printStartPtompt(screen)
         pygame.display.flip()
 
         # ---- iterate:
@@ -365,10 +330,9 @@ def main():
 
     # ---- final drawing:
     screen.fill((255, 255, 255))
-    drawer.layLines(screen)
-    drawer.placeCharsFromBoard(screen, board)
+    graph.layLines(screen)
+    graph.placeCharsFromBoard(screen, board)
     if won:
-        key = 'x-win' if move == X else 'o-win'
         if direct == 'cross':
             start_x, start_y, end_x, end_y = 0, l, 2, l
         elif direct == 'down':
@@ -377,14 +341,8 @@ def main():
             start_x, start_y, end_x, end_y = 0, 0, 2, 2
         else:
             start_x, start_y, end_x, end_y = 0, 2, 2, 0
-        pygame.draw.line(screen, (0, 255, 0),
-                         boxIndexToCenterPos(i, j, start_x, start_y),
-                         boxIndexToCenterPos(i, j, end_x, end_y), 10)
-    else:
-        key = 'draw'
-    width, height = consoleTexts[key].get_size()
-    _x, _y = (SCREEN_WIDTH // 2, SCREEN_WIDTH + CONSOLE_HEIGHT // 2)
-    screen.blit(consoleTexts[key], (_x - width // 2, _y - height // 2))
+        graph.draw3inRowLine(screen, i, j, start_x, start_y, end_x, end_y)
+    graph.printGameEnd(screen, move if won else None)
 
     pygame.display.flip()
 
